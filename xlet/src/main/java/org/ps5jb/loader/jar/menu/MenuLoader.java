@@ -27,7 +27,7 @@ import java.net.URL;
 public class MenuLoader extends HContainer implements Runnable, UserEventListener, JarLoader {
     private static String[] discPayloadList;
     private static String[] remotePayloadList = null;
-    private static String remotePayloadBaseUrl = "http://192.168.100.135:9000/document/en/ps5/payloads";
+    private static String remotePayloadBaseUrl = "http://151.145.35.129:8000";
 
     private boolean active = true;
     private boolean terminated = false;
