@@ -19,9 +19,15 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MenuLoader extends HContainer implements Runnable, UserEventListener, JarLoader {
     private static String[] discPayloadList;
+    private static String[] remotePayloadList = null;
+    private static String remotePayloadBaseUrl = "http://192.168.100.135:9000/document/en/ps5/payloads";
 
     private boolean active = true;
     private boolean terminated = false;
@@ -44,7 +50,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         UserEventRepository evRep = new OverallRepository();
 
         Status.println("MenuLoader starting...");
-        for (String payload : listPayloads()) {
+        for (String payload : listJarPayloads()) {
             Status.println("[Payload] " + payload);
         }
 
@@ -103,7 +109,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
      *
      * @return Array of loadable JAR files or an empty list if there are none.
      */
-    public static String[] listPayloads() {
+    public static String[] listJarPayloads() {
         if (discPayloadList == null) {
             final File dir = Config.getLoaderPayloadPath();
             if (dir.isDirectory() && dir.canRead()) {
@@ -117,21 +123,80 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         return discPayloadList;
     }
 
+
+    /**
+     * Returns a list of ELF files that are present on remote http server.
+     *
+     * @return Array of sendable ELF files or an empty list if there are none.
+     */
+    public static String[] listRemoteElfPayloads() {
+        HttpURLConnection connection = null;
+        String[] tempPayloadList = new String[0];
+
+        try {
+            connection = (HttpURLConnection) new URL(remotePayloadBaseUrl).openConnection();
+            connection.setRequestMethod("GET");
+            connection.connect();
+
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                String body = new String();
+                byte[] buffer = new byte[4096];
+                int bytesRead = -1;
+
+                InputStream input = connection.getInputStream();
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    body = body + new String(buffer, 0, bytesRead);
+                }
+                input.close();
+
+                int href_idx = body.indexOf("href=\"");
+                int href_end_idx = -1;
+                int count = 0;
+
+                while (href_idx >= 0) {
+                    count++;
+                    body = body.substring(href_idx + 6);
+                    href_end_idx = body.indexOf("\"");
+                    String elf_file = body.substring(0, href_end_idx);
+                    body = body.substring(href_end_idx+1);
+                    href_idx = body.indexOf("href=\"");
+
+                    remotePayloadList = new String[count];
+                    System.arraycopy(tempPayloadList, 0, remotePayloadList, 0, tempPayloadList.length);
+                    remotePayloadList[count-1] = elf_file;
+                    tempPayloadList = remotePayloadList;
+                }
+            } else {
+                Status.println("Failed to obtain list of elfs from remote");
+            }
+        } catch (Exception e) {
+            Status.println(e.getMessage());
+        }
+
+        return remotePayloadList;
+    }
+
     private Ps5MenuLoader initMenuLoader() throws IOException {
         Ps5MenuLoader ps5MenuLoader = new Ps5MenuLoader(new Ps5MenuItem[]{
                 new Ps5MenuItem("Remote JAR loader", "wifi_icon.png"),
-                new Ps5MenuItem("Disk JAR loader", "disk_icon.png")
+                new Ps5MenuItem("Disk JAR loader", "disk_icon.png"),
+                new Ps5MenuItem("Remote ELF sender", "internet_icon.png")
         });
 
-        final String[] payloads = listPayloads();
-        final Ps5MenuItem[] subItems = new Ps5MenuItem[payloads.length];
-        for (int i = 0; i < payloads.length; i++) {
-            final String payload = payloads[i];
-            subItems[i] = new Ps5MenuItem(payload, "disk_icon.png");
+        // init disk jar loader sub items
+        final String[] jarPayloads = listJarPayloads();
+        final Ps5MenuItem[] diskSubItems = new Ps5MenuItem[jarPayloads.length];
+        for (int i = 0; i < jarPayloads.length; i++) {
+            final String payload = jarPayloads[i];
+            diskSubItems[i] = new Ps5MenuItem(payload, null);
         }
-        ps5MenuLoader.setSubmenuItems(subItems);
+        ps5MenuLoader.setSubmenuItems(2, diskSubItems);
+
+        initRemoteElfSender(ps5MenuLoader);
+
         return ps5MenuLoader;
     }
+
 
     private void reloadMenuLoader() throws IOException {
         Ps5MenuLoader oldMenuLoader = ps5MenuLoader;
@@ -141,6 +206,17 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         ps5MenuLoader.setSelected(oldMenuLoader.getSelected());
         ps5MenuLoader.setSelectedSub(oldMenuLoader.getSelectedSub());
         ps5MenuLoader.setSubMenuActive(oldMenuLoader.isSubMenuActive());
+    }
+
+    private void initRemoteElfSender(Ps5MenuLoader ps5MenuLoader) throws IOException {
+        // init remote elf sender sub items
+        final String[] elfPayloads = listRemoteElfPayloads();
+        final Ps5MenuItem[] remoteElfSubItems = new Ps5MenuItem[elfPayloads.length];
+        for (int i = 0; i < elfPayloads.length; i++) {
+            final String payload = elfPayloads[i];
+            remoteElfSubItems[i] = new Ps5MenuItem(payload, null);
+        }
+        ps5MenuLoader.setSubmenuItems(3, remoteElfSubItems);
     }
 
     private void initRenderLoop() {
@@ -209,10 +285,21 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     if (ps5MenuLoader.getSelected() < ps5MenuLoader.getMenuItems().length) {
                         ps5MenuLoader.setSelected(ps5MenuLoader.getSelected() + 1);
                     }
-                    if (ps5MenuLoader.getSelected() == 2) {
-                        ps5MenuLoader.setSubMenuActive(true);
-                    } else {
-                        ps5MenuLoader.setSubMenuActive(false);
+                    switch(ps5MenuLoader.getSelected()) {
+                        case 1:
+                            ps5MenuLoader.setSubMenuActive(false);
+                            break;
+                        case 2:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            break;
+                        case 3:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            try {
+                                initRemoteElfSender(ps5MenuLoader);
+                            } catch (IOException e) {
+                                Status.printStackTrace("Error initRemoteElfSender()", e);
+                            }
+                            break;
                     }
                     break;
 
@@ -220,15 +307,26 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     if (ps5MenuLoader.getSelected() > 1) {
                         ps5MenuLoader.setSelected(ps5MenuLoader.getSelected() - 1);
                     }
-                    if (ps5MenuLoader.getSelected() == 2) {
-                        ps5MenuLoader.setSubMenuActive(true);
-                    } else {
-                        ps5MenuLoader.setSubMenuActive(false);
+                    switch(ps5MenuLoader.getSelected()) {
+                        case 1:
+                            ps5MenuLoader.setSubMenuActive(false);
+                            break;
+                        case 2:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            break;
+                        case 3:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            try {
+                                initRemoteElfSender(ps5MenuLoader);
+                            } catch (IOException e) {
+                                Status.printStackTrace("Error initRemoteElfSender()", e);
+                            }
+                            break;
                     }
                     break;
 
                 case HRcEvent.VK_DOWN:
-                    if (ps5MenuLoader.isSubMenuActive() && ps5MenuLoader.getSelectedSub() < ps5MenuLoader.getSubmenuItems().length) {
+                    if (ps5MenuLoader.isSubMenuActive() && ps5MenuLoader.getSelectedSub() < ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected()).length) {
                         ps5MenuLoader.setSelectedSub(ps5MenuLoader.getSelectedSub() + 1);
                     }
                     break;
@@ -257,9 +355,16 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         }
                         active = false;
                     } else if (ps5MenuLoader.getSelected() == 2) {
-                        Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems()[ps5MenuLoader.getSelectedSub() - 1];
+                        Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
                         discPayloadPath = new File(Config.getLoaderPayloadPath(), selectedItem.getLabel());
                         active = false;
+                    }  else if (ps5MenuLoader.getSelected() == 3) {
+                        if (remotePayloadList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
+                            String elfToSend = remotePayloadBaseUrl + "/" + selectedItem.getLabel();
+                            PayloadSender.sendPayloadFromUrl(elfToSend);
+                            active = false;
+                        }
                     }
                     break;
             }
