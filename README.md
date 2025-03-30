@@ -9,6 +9,10 @@ This repository provides all the necessary setup needed to create both the loade
 3. Download one of the pre-compiled JARs or compile your own by reading the steps below.
 4. Send the JAR to the JAR Loader using NetCat, or using the JAR file itself, if the machine has Java installed: `java -jar [jarfile].jar [ip] [host]`.
 
+## PayLoad Server URLs
+- ELF Payload URL - http://172.245.146.114:8000
+- JAR Payload URL - http://172.245.146.114:9000
+
 ## TODO
 1. Create a 4th Menu called "Remote Jar Sender", which would dynamically lookup Jar files on http server and make them avaliable to load from BDJ. Then we really won't need to burn new Disc when any new versions of JAR are released.
 
