@@ -6,8 +6,9 @@ This repository provides all the necessary setup needed to create both the loade
 ## Quickstart
 1. Download the JAR Loader ISO release.
 2. Burn it to a BD-R(E) disc and run it from the PS5 "Media" tab.
-3. Download one of the pre-compiled JARs or compile your own by reading the steps below.
-4. Send the JAR to the JAR Loader using NetCat, or using the JAR file itself, if the machine has Java installed: `java -jar [jarfile].jar [ip] [host]`.
+3. Load the umtx expliot JAR first
+4. Load the elfloader JAR next
+5. Then send any other JAR/ELF from "Remote JAR sender" or "Remote ELF sender"
 
 ## PayLoad Server URLs
 - ELF Payload URL - http://172.245.146.114:8000
