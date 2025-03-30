@@ -5,7 +5,8 @@
 - Removed some payloads in JAR package format
 - Disc loader has only umtx and elfloader
 - Uses my [fork of elfloader](https://github.com/cy33hc/elfloader) that pulls the elfldr.elf from remote http server. So if there are newer version, I just need to update my http server.
-- Added a 3rd Menu called "Remote Elf Sender" which reaches out to a http server to dymanic get payload elf's
+- Added a 3rd Menu called "Remote JAR Sender" which reaches out to a http server to dymanic get JAR payloads
+- Added a 4rd Menu called "Remote ELF Sender" which reaches out to a http server to dymanic get ELF payloads
 - App is reaching out to my own [JAR server](http://172.245.146.114:8000) and [ELF server](http://172.245.146.114:8000) to pull the down the latest JARs and ELFs. I had paid for 1 year subscription for this server and plan to continue renewal for as long as I can. JAR and ELF filenames are appended with either the version# or the commit id. Payloads will be checked daily for newer versions and updated on my server.
 - Advantage for this is that you don't need to burn new BDJ disc when new versions of payloads are released, provided that I update it :)
 - Run payloads directly from the PS5 and don't need to send from computer/phone etc..
