@@ -1,5 +1,5 @@
 # EZ PS5 JAR Loader
-## This is a fork of "PS5 Jar Loader" by [hammer-83](https://github.com/hammer-83). I called is "EZ PS5 Jar Loader" so it's easy to differentiate.
+## This is a fork of "PS5 Jar Loader" by [hammer-83](https://github.com/hammer-83). I called it "EZ PS5 Jar Loader" so it's easy to differentiate.
 
 ## What's Different
 - Removed some payloads in JAR package format
