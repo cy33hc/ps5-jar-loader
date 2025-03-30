@@ -20,8 +20,8 @@
 5. Then send any other JAR/ELF from "Remote JAR sender" or "Remote ELF sender"
 
 ## PayLoad Server URLs
-- ELF Payload URL - http://172.245.146.114:8000
-- JAR Payload URL - http://172.245.146.114:9000
+- ELF Payload URL - http://payloads.ezremote.site:8000
+- JAR Payload URL - http://payloads.ezremote.site:9000
 
 ## TODO
 1. Create a 4th Menu called "Remote Jar Sender", which would dynamically lookup Jar files on http server and make them avaliable to load from BDJ. Then we really won't need to burn new Disc when any new versions of JAR are released.
