@@ -9,6 +9,9 @@ This repository provides all the necessary setup needed to create both the loade
 3. Download one of the pre-compiled JARs or compile your own by reading the steps below.
 4. Send the JAR to the JAR Loader using NetCat, or using the JAR file itself, if the machine has Java installed: `java -jar [jarfile].jar [ip] [host]`.
 
+## TODO
+1. Create a 4th Menu called "Remote Jar Sender", which would dynamically lookup Jar files on http server and make them avaliable to load from BDJ. Then we really won't need to burn new Disc when any new versions of JAR are released.
+
 ## Prerequisites
 * JDK 11 (PS5 uses Java 11 runtime)
 * Apache Maven
