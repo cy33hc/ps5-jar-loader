@@ -27,14 +27,12 @@ public class PayloadSender {
                 elfldrSocket = new Socket("127.0.0.1", 9021);
                 OutputStream outputStream = elfldrSocket.getOutputStream();
 
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int bytesRead;
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
                 }
-                outputStream.close();
-                inputStream.close();
 
                 Status.println(url + " was sent to elfldr on port 9021.");
             } else {
@@ -48,6 +46,16 @@ public class PayloadSender {
                     elfldrSocket.close();
                 } catch (IOException e) {
                     // ignore
+                }
+            }
+            if (connection != null)
+            {
+                try {
+                    connection.getInputStream().close();
+                    connection.getOutputStream().close();;
+                    connection.disconnect();
+                } catch (Exception e) {
+                    // do nothing
                 }
             }
         }

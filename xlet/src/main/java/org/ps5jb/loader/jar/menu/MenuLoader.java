@@ -13,6 +13,7 @@ import org.ps5jb.loader.Config;
 import org.ps5jb.loader.Status;
 import org.ps5jb.loader.jar.JarLoader;
 import org.ps5jb.loader.jar.RemoteJarLoader;
+import org.ps5jb.loader.jar.RemoteJarSender;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -20,14 +21,19 @@ import java.awt.Graphics;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class MenuLoader extends HContainer implements Runnable, UserEventListener, JarLoader {
     private static String[] discPayloadList;
     private static String[] remotePayloadList = null;
-    private static String remotePayloadBaseUrl = "http://172.245.146.114:8000";
+    private static String remotePayloadBaseUrl = "http://payloads.ezremote.site:8000";
+    private static String[] remoteJarList = null;
+    private static String remoteJarBaseUrl = "http://payloads.ezremote.site:9000";
 
     private boolean active = true;
     private boolean terminated = false;
@@ -37,6 +43,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
     private Ps5MenuLoader ps5MenuLoader;
 
     private File discPayloadPath = null;
+    private File remotePayloadPath = null;
     private JarLoader remoteJarLoaderJob = null;
     private Thread remoteJarLoaderThread = null;
 
@@ -72,6 +79,19 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                                 em.addUserEventListener(this, evRep);
                             }
                             discPayloadPath = null;
+                        } else if (remotePayloadPath != null) {
+                            em.removeUserEventListener(this);
+                            try {
+                                loadJar(remotePayloadPath, true);
+                            } catch (InterruptedException e) {
+                                // Ignore
+                            } catch (Throwable ex) {
+                                // JAR execution didn't work, notify and wait to return to the menu
+                                Status.printStackTrace("Could not load JAR from disc", ex);
+                            } finally {
+                                em.addUserEventListener(this, evRep);
+                            }
+                            remotePayloadPath = null;
                         } else if (remoteJarLoaderThread != null) {
                             try {
                                 // Wait on remote JAR loader to finish
@@ -140,14 +160,13 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
 
             if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
                 String body = new String();
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int bytesRead = -1;
 
                 InputStream input = connection.getInputStream();
                 while ((bytesRead = input.read(buffer)) != -1) {
                     body = body + new String(buffer, 0, bytesRead);
                 }
-                input.close();
 
                 int href_idx = body.indexOf("href=\"");
                 int href_end_idx = -1;
@@ -171,15 +190,89 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             }
         } catch (Exception e) {
             Status.println(e.getMessage());
+        } finally {
+            if (connection != null)
+            {
+                try {
+                    connection.getInputStream().close();
+                    connection.getOutputStream().close();;
+                    connection.disconnect();
+                } catch (Exception e) {
+                    // do nothing
+                }
+            }
         }
 
         return remotePayloadList;
+    }
+
+    /**
+     * Returns a list of JAR files that are present on remote http server.
+     *
+     * @return Array of sendable ELF files or an empty list if there are none.
+     */
+    public static String[] listRemoteJarPayloads() {
+        HttpURLConnection connection = null;
+        String[] tempPayloadList = new String[0];
+
+        try {
+            connection = (HttpURLConnection) new URL(remoteJarBaseUrl).openConnection();
+            connection.setRequestMethod("GET");
+            connection.connect();
+
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                String body = new String();
+                byte[] buffer = new byte[8192];
+                int bytesRead = -1;
+
+                InputStream input = connection.getInputStream();
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    body = body + new String(buffer, 0, bytesRead);
+                }
+
+                int href_idx = body.indexOf("href=\"");
+                int href_end_idx = -1;
+                int count = 0;
+
+                while (href_idx >= 0) {
+                    count++;
+                    body = body.substring(href_idx + 6);
+                    href_end_idx = body.indexOf("\"");
+                    String elf_file = body.substring(0, href_end_idx);
+                    body = body.substring(href_end_idx+1);
+                    href_idx = body.indexOf("href=\"");
+
+                    remoteJarList = new String[count];
+                    System.arraycopy(tempPayloadList, 0, remoteJarList, 0, tempPayloadList.length);
+                    remoteJarList[count-1] = elf_file;
+                    tempPayloadList = remoteJarList;
+                }
+            } else {
+                Status.println("Failed to obtain list of JARs from remote");
+            }
+        } catch (Exception e) {
+            Status.printStackTrace("Failed to obtain list of JARs", e);
+        } finally {
+            if (connection != null)
+            {
+                try {
+                    connection.getInputStream().close();
+                    connection.getOutputStream().close();;
+                    connection.disconnect();
+                } catch (Exception e) {
+                    // do nothing
+                }
+            }
+        }
+
+        return remoteJarList;
     }
 
     private Ps5MenuLoader initMenuLoader() throws IOException {
         Ps5MenuLoader ps5MenuLoader = new Ps5MenuLoader(new Ps5MenuItem[]{
                 new Ps5MenuItem("Remote JAR loader", "wifi_icon.png"),
                 new Ps5MenuItem("Disk JAR loader", "disk_icon.png"),
+                new Ps5MenuItem("Remote JAR sender", "internet_icon.png"),
                 new Ps5MenuItem("Remote ELF sender", "internet_icon.png")
         });
 
@@ -192,11 +285,72 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         }
         ps5MenuLoader.setSubmenuItems(2, diskSubItems);
 
+        initRemoteJarSender(ps5MenuLoader);
         initRemoteElfSender(ps5MenuLoader);
 
         return ps5MenuLoader;
     }
 
+    private File downloadRemoteJarPayload(String url)
+    {
+        HttpURLConnection connection = null;
+
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("GET");
+            connection.connect();
+
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                InputStream inputStream = connection.getInputStream();
+
+                Path jarPath = Files.createTempFile("jarLoader", ".jar");
+                File jarFile = jarPath.toFile();
+
+                try {
+                    jarFile.deleteOnExit();
+
+                    Status.println("Receiving JAR data to: " + jarFile);
+                    byte[] buf = new byte[8192];
+                    int readCount;
+                    int totalSize = 0;
+                    OutputStream jarOut = Files.newOutputStream(jarPath);
+                    try {
+                        while ((readCount = inputStream.read(buf)) != -1) {
+                            jarOut.write(buf, 0, readCount);
+
+                            Status.println("Received " + totalSize + " bytes...", totalSize != 0);
+                            totalSize += readCount;
+                        }
+                    } finally {
+                        jarOut.close();
+                    }
+                    Status.println("Received " + totalSize + " bytes...Done", true); 
+                    
+                    return jarFile; 
+                } catch (IOException | RuntimeException | Error e) {
+                    deleteTempJar(jarFile);
+                    throw e;
+                }    
+            } else {
+                Status.println("Failed to read JAR " + connection.getResponseMessage());
+            }
+        } catch (Exception e) {
+            Status.printStackTrace("Failed to get JAR", e);
+        } finally {
+            if (connection != null)
+            {
+                try {
+                    connection.getInputStream().close();
+                    connection.getOutputStream().close();;
+                    connection.disconnect();
+                } catch (Exception e) {
+                    // do nothing
+                }
+            }
+        }
+
+        return null;
+    }
 
     private void reloadMenuLoader() throws IOException {
         Ps5MenuLoader oldMenuLoader = ps5MenuLoader;
@@ -208,6 +362,17 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         ps5MenuLoader.setSubMenuActive(oldMenuLoader.isSubMenuActive());
     }
 
+    private void initRemoteJarSender(Ps5MenuLoader ps5MenuLoader) throws IOException {
+        // init remote jar sender sub items
+        final String[] jarPayloads = listRemoteJarPayloads();
+        final Ps5MenuItem[] remoteJarSubItems = new Ps5MenuItem[jarPayloads.length];
+        for (int i = 0; i < jarPayloads.length; i++) {
+            final String payload = jarPayloads[i];
+            remoteJarSubItems[i] = new Ps5MenuItem(payload, null);
+        }
+        ps5MenuLoader.setSubmenuItems(3, remoteJarSubItems);
+    }
+
     private void initRemoteElfSender(Ps5MenuLoader ps5MenuLoader) throws IOException {
         // init remote elf sender sub items
         final String[] elfPayloads = listRemoteElfPayloads();
@@ -216,7 +381,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             final String payload = elfPayloads[i];
             remoteElfSubItems[i] = new Ps5MenuItem(payload, null);
         }
-        ps5MenuLoader.setSubmenuItems(3, remoteElfSubItems);
+        ps5MenuLoader.setSubmenuItems(4, remoteElfSubItems);
     }
 
     private void initRenderLoop() {
@@ -295,6 +460,14 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         case 3:
                             ps5MenuLoader.setSubMenuActive(true);
                             try {
+                                initRemoteJarSender(ps5MenuLoader);
+                            } catch (IOException e) {
+                                Status.printStackTrace("Error initRemoteJarSender()", e);
+                            }
+                            break;
+                        case 4:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            try {
                                 initRemoteElfSender(ps5MenuLoader);
                             } catch (IOException e) {
                                 Status.printStackTrace("Error initRemoteElfSender()", e);
@@ -315,6 +488,14 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                             ps5MenuLoader.setSubMenuActive(true);
                             break;
                         case 3:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            try {
+                                initRemoteJarSender(ps5MenuLoader);
+                            } catch (IOException e) {
+                                Status.printStackTrace("Error initRemoteJarSender()", e);
+                            }
+                            break;
+                        case 4:
                             ps5MenuLoader.setSubMenuActive(true);
                             try {
                                 initRemoteElfSender(ps5MenuLoader);
@@ -358,7 +539,26 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
                         discPayloadPath = new File(Config.getLoaderPayloadPath(), selectedItem.getLabel());
                         active = false;
-                    }  else if (ps5MenuLoader.getSelected() == 3) {
+                    }  else if (ps5MenuLoader.getSelected() == 3 && remoteJarLoaderThread == null) {
+                        if (remoteJarList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
+                            String jarToSend = remoteJarBaseUrl + "/" + selectedItem.getLabel();
+                            remotePayloadPath = downloadRemoteJarPayload(jarToSend);
+                            /* try {
+                                remoteJarLoaderJob = new RemoteJarSender(jarToSend);
+                                remoteJarLoaderThread = new Thread(remoteJarLoaderJob, "RemoteJarSender");
+    
+                                // Notify the user that this is a one time switch and that BD-J restart is required to return to the menu
+                                Status.println("Starting remote JAR sender. To return to the loader menu, press 3-2-1");
+                                remoteJarLoaderThread.start();
+                            } catch (Throwable ex) {
+                                Status.printStackTrace("Remote JAR sender could not be initialized. Press X to continue", ex);
+                                waiting = true;
+                            } */
+
+                            active = false;
+                        }
+                    } else if (ps5MenuLoader.getSelected() == 4) {
                         if (remotePayloadList.length > 0) {
                             Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
                             String elfToSend = remotePayloadBaseUrl + "/" + selectedItem.getLabel();
