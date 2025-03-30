@@ -3,7 +3,7 @@
 
 ## What's Different
 - Removed some payloads in JAR package format
-- Disc loader has only umtx and elfloader
+- Disc JAR loader has only umtx and elfloader
 - Uses my [fork of elfloader](https://github.com/cy33hc/elfloader) that pulls the elfldr.elf from remote http server. So if there are newer version, I just need to update my http server.
 - Added a 3rd Menu called "Remote JAR Sender" which reaches out to my http server to dymanic get JAR payloads
 - Added a 4rd Menu called "Remote ELF Sender" which reaches out to my http server to dymanic get ELF payloads
@@ -15,8 +15,8 @@
 ## Quickstart
 1. Download the JAR Loader ISO release.
 2. Burn it to a BD-R(E) disc and run it from the PS5 "Media" tab.
-3. From either the **"Disc Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
-4. From either the **"Disc Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
+3. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
+4. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
 5. Then send any other JAR/ELF from "Remote JAR sender" or "Remote ELF sender"
 
 ## PayLoad Server URLs
