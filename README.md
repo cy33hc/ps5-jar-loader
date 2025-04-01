@@ -1,11 +1,12 @@
 # EZ PS5 JAR Loader
-## This is a fork of "PS5 Jar Loader" by [hammer-83](https://github.com/hammer-83). I called is "EZ PS5 Jar Loader" so it's easy to differentiate.
+## This is a fork of "PS5 Jar Loader" by [hammer-83](https://github.com/hammer-83). I called it "EZ PS5 Jar Loader" so it's easy to differentiate.
 
 ## What's Different
 - Removed some payloads in JAR package format
-- Disc loader has only umtx and elfloader
+- Disc JAR loader has only umtx and elfloader
 - Uses my [fork of elfloader](https://github.com/cy33hc/elfloader) that pulls the elfldr.elf from remote http server. So if there are newer version, I just need to update my http server.
-- Added a 3rd Menu called "Remote Elf Sender" which reaches out to a http server to dymanic get payload elf's
+- Added a 3rd Menu called "Remote JAR Sender" which reaches out to my http server to dymanic get JAR payloads
+- Added a 4rd Menu called "Remote ELF Sender" which reaches out to my http server to dymanic get ELF payloads
 - App is reaching out to my own [JAR server](http://172.245.146.114:8000) and [ELF server](http://172.245.146.114:8000) to pull the down the latest JARs and ELFs. I had paid for 1 year subscription for this server and plan to continue renewal for as long as I can. JAR and ELF filenames are appended with either the version# or the commit id. Payloads will be checked daily for newer versions and updated on my server.
 - Advantage for this is that you don't need to burn new BDJ disc when new versions of payloads are released, provided that I update it :)
 - Run payloads directly from the PS5 and don't need to send from computer/phone etc..
@@ -14,13 +15,13 @@
 ## Quickstart
 1. Download the JAR Loader ISO release.
 2. Burn it to a BD-R(E) disc and run it from the PS5 "Media" tab.
-3. From either the **"Disc Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as they are updated.
-4. From either the **"Disc Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as they are updated.
+3. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
+4. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
 5. Then send any other JAR/ELF from "Remote JAR sender" or "Remote ELF sender"
 
 ## PayLoad Server URLs
-- ELF Payload URL - http://172.245.146.114:8000
-- JAR Payload URL - http://172.245.146.114:9000
+- ELF Payload URL - http://payloads.ezremote.site:8000
+- JAR Payload URL - http://payloads.ezremote.site:9000
 
 ## TODO
 1. Create a 4th Menu called "Remote Jar Sender", which would dynamically lookup Jar files on http server and make them avaliable to load from BDJ. Then we really won't need to burn new Disc when any new versions of JAR are released.
