@@ -13,7 +13,6 @@ import org.ps5jb.loader.Config;
 import org.ps5jb.loader.Status;
 import org.ps5jb.loader.jar.JarLoader;
 import org.ps5jb.loader.jar.RemoteJarLoader;
-import org.ps5jb.loader.jar.RemoteJarSender;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -23,7 +22,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.Socket;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
