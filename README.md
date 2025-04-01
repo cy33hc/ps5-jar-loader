@@ -15,8 +15,8 @@
 ## Quickstart
 1. Download the JAR Loader ISO release.
 2. Burn it to a BD-R(E) disc and run it from the PS5 "Media" tab.
-3. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
-4. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as it are updated.
+3. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **umtx** expliot JAR first. "Remote JAR sender" will have the newer version as it is updated.
+4. From either the **"Disc JAR Loader"** or **"Remote JAR sender"** menu, load the **elfloader** expliot JAR first. "Remote JAR sender" will have the newer version as it is updated.
 5. Then send any other JAR/ELF from "Remote JAR sender" or "Remote ELF sender"
 
 ## PayLoad Server URLs
