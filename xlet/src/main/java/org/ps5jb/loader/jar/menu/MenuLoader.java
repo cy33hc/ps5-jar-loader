@@ -187,7 +187,8 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                 Status.println("Failed to obtain list of elfs from remote");
             }
         } catch (Exception e) {
-            Status.println(e.getMessage());
+            Status.printStackTrace("Failed to obtain list of ELFs", e);
+            remotePayloadList = new String[0];
         } finally {
             if (connection != null)
             {
@@ -250,6 +251,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             }
         } catch (Exception e) {
             Status.printStackTrace("Failed to obtain list of JARs", e);
+            remoteJarList = new String[0];
         } finally {
             if (connection != null)
             {

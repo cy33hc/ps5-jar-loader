@@ -13,6 +13,7 @@
 
     <groupId>org.ps5jb</groupId>
     <artifactId>xploit</artifactId>
+    <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <description>
         Parent module for all exploit JARs. Includes the infrastructure required to build them.
