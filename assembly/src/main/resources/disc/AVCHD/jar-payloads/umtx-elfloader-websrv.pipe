@@ -1,6 +1,6 @@
 jar disc umtx1-1.0-SNAPSHOT.jar
 sleep 5
 jar disc elfloader-1.1-SNAPSHOT.jar
-sleep 8
+sleep 10
 elf remote websrv-latest.elf
-sleep 3
+sleep 5
