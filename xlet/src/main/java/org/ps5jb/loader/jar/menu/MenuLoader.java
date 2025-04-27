@@ -28,10 +28,14 @@ import java.nio.file.Path;
 
 public class MenuLoader extends HContainer implements Runnable, UserEventListener, JarLoader {
     private static String[] discPayloadList;
-    private static String[] remotePayloadList = null;
-    private static String remotePayloadBaseUrl = "http://payloads.ezremote.site:8000";
+    private static String[] remoteElfList = null;
     private static String[] remoteJarList = null;
-    private static String remoteJarBaseUrl = "http://payloads.ezremote.site:9000";
+    private static String[] usbPayloadList;
+    private static String[] ssdPayloadList;
+    private static String[] pipelineList;
+    private static File usbPayloadRoot;
+    private static File ssdPayloadRoot;
+    private static UserEventRepository evRep = new OverallRepository();
 
     private boolean active = true;
     private boolean terminated = false;
@@ -42,6 +46,8 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
 
     private File discPayloadPath = null;
     private File remotePayloadPath = null;
+    private File pipelinePath = null;
+
     private JarLoader remoteJarLoaderJob = null;
     private Thread remoteJarLoaderThread = null;
 
@@ -52,7 +58,6 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
     @Override
     public void run() {
         EventManager em = EventManager.getInstance();
-        UserEventRepository evRep = new OverallRepository();
 
         Status.println("MenuLoader starting...");
         for (String payload : listJarPayloads()) {
@@ -99,6 +104,9 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                             }
                             remoteJarLoaderThread = null;
                             remoteJarLoaderJob = null;
+                        } else if (pipelinePath != null) {
+                            PipelineRunner.runPipeline(pipelinePath, this);
+                            pipelinePath = null;
                         }
 
                         // Reload the menu in case paths to payloads changed after JAR execution
@@ -114,12 +122,16 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     initRenderLoop();
                 }
             }
-        } catch (RuntimeException | Error | IOException ex) {
+        } catch (RuntimeException | Error  ex) {
             Status.printStackTrace("Unhandled exception", ex);
             terminated = true;
         } finally {
             em.removeUserEventListener(this);
         }
+    }
+
+    public static UserEventRepository getUserEventRepository() {
+        return evRep;
     }
 
     /**
@@ -131,7 +143,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         if (discPayloadList == null) {
             final File dir = Config.getLoaderPayloadPath();
             if (dir.isDirectory() && dir.canRead()) {
-                discPayloadList = dir.list();
+                discPayloadList = dir.list((dir1, name) -> name.toLowerCase().endsWith(".jar"));
             }
 
             if (discPayloadList == null) {
@@ -141,6 +153,81 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         return discPayloadList;
     }
 
+    /**
+     * Returns a list of ELF/BIN files that are present on usb.
+     *
+     * @return Array of sendable ELF files or an empty list if there are none.
+     */
+    public static String[] listUsbPayloads() {
+        // search for usb0 - usb7
+        usbPayloadList = new String[0];
+        for (int i = 0; i < 8; i++) {
+            try {
+                File f = new File("/mnt/usb" + i + "/payloads");
+                if (f.exists() && f.isDirectory() && f.canRead())
+                {
+                    usbPayloadList = f.list((dir1, name) -> name.toLowerCase().endsWith(".elf") || name.toLowerCase().endsWith(".bin") || name.toLowerCase().endsWith(".jar"));
+                    if (usbPayloadList.length > 0)
+                    {
+                        Status.println("Found usb with elf(s) on " + f.getAbsolutePath());
+                        usbPayloadRoot = f;
+                        break;
+                    }
+                }
+            } catch (Exception ex) {
+                Status.println("Error searching for usb" + i);
+            }
+        }
+
+        return usbPayloadList;
+    }
+
+    /**
+     * Returns a list of ELF/BIN files that are present on usb.
+     *
+     * @return Array of sendable ELF files or an empty list if there are none.
+     */
+    public static String[] listSsdPayloads() {
+        ssdPayloadList = new String[0];
+        try {
+            File f = new File("/data/payloads");
+            if (f.exists() && f.isDirectory() && f.canRead())
+            {
+                ssdPayloadList = f.list((dir1, name) -> name.toLowerCase().endsWith(".elf") || name.toLowerCase().endsWith(".bin") || name.toLowerCase().endsWith(".jar"));
+                if (ssdPayloadList.length > 0)
+                {
+                    Status.println("Found usb with elf(s) on " + f.getAbsolutePath());
+                    ssdPayloadRoot = f;
+                }
+            }
+            else {
+                ssdPayloadList = new String[0];
+            }
+        } catch (Exception ex) {
+            Status.println("Error searching /data/payloads folder");
+        }
+
+        return ssdPayloadList;
+    }
+
+    /**
+     * Returns a list of Pipeline files that are present on /.
+     *
+     * @return Array of loadable JAR files or an empty list if there are none.
+     */
+    public static String[] listPipelines() {
+        if (pipelineList == null) {
+            final File dir = Config.getLoaderPayloadPath();
+            if (dir.isDirectory() && dir.canRead()) {
+                pipelineList = dir.list((dir1, name) -> name.toLowerCase().endsWith(".pipe"));
+            }
+
+            if (pipelineList == null) {
+                pipelineList = new String[0];
+            }
+        }
+        return pipelineList;
+    }
 
     /**
      * Returns a list of ELF files that are present on remote http server.
@@ -151,8 +238,14 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         HttpURLConnection connection = null;
         String[] tempPayloadList = new String[0];
 
+        if (!Config.isRemoteUp())
+        {
+            remoteElfList = new String[0];
+            return remoteElfList;
+        }
+
         try {
-            connection = (HttpURLConnection) new URL(remotePayloadBaseUrl).openConnection();
+            connection = (HttpURLConnection) new URL(Config.getRemotePayloadBaseUrl()).openConnection();
             connection.setRequestMethod("GET");
             connection.connect();
 
@@ -178,23 +271,27 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     body = body.substring(href_end_idx+1);
                     href_idx = body.indexOf("href=\"");
 
-                    remotePayloadList = new String[count];
-                    System.arraycopy(tempPayloadList, 0, remotePayloadList, 0, tempPayloadList.length);
-                    remotePayloadList[count-1] = elf_file;
-                    tempPayloadList = remotePayloadList;
+                    remoteElfList = new String[count];
+                    System.arraycopy(tempPayloadList, 0, remoteElfList, 0, tempPayloadList.length);
+                    remoteElfList[count-1] = elf_file;
+                    tempPayloadList = remoteElfList;
                 }
             } else {
                 Status.println("Failed to obtain list of elfs from remote");
             }
         } catch (Exception e) {
             Status.printStackTrace("Failed to obtain list of ELFs", e);
-            remotePayloadList = new String[0];
+            remoteElfList = new String[0];
         } finally {
             if (connection != null)
             {
                 try {
-                    connection.getInputStream().close();
-                    connection.getOutputStream().close();;
+                    if (connection.getInputStream() != null)
+                        connection.getInputStream().close();
+                    if (connection.getOutputStream() != null)
+                        connection.getOutputStream().close();
+                    if (connection.getErrorStream() != null)
+                        connection.getErrorStream().close();
                     connection.disconnect();
                 } catch (Exception e) {
                     // do nothing
@@ -202,7 +299,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             }
         }
 
-        return remotePayloadList;
+        return remoteElfList;
     }
 
     /**
@@ -214,8 +311,14 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         HttpURLConnection connection = null;
         String[] tempPayloadList = new String[0];
 
+        if (!Config.isRemoteUp())
+        {
+            remoteJarList = new String[0];
+            return remoteJarList;
+        }
+
         try {
-            connection = (HttpURLConnection) new URL(remoteJarBaseUrl).openConnection();
+            connection = (HttpURLConnection) new URL(Config.getRemoteJarBaseUrl()).openConnection();
             connection.setRequestMethod("GET");
             connection.connect();
 
@@ -256,8 +359,12 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             if (connection != null)
             {
                 try {
-                    connection.getInputStream().close();
-                    connection.getOutputStream().close();;
+                    if (connection.getInputStream() != null)
+                        connection.getInputStream().close();
+                    if (connection.getOutputStream() != null)
+                        connection.getOutputStream().close();
+                    if (connection.getErrorStream() != null)
+                        connection.getErrorStream().close();
                     connection.disconnect();
                 } catch (Exception e) {
                     // do nothing
@@ -268,27 +375,47 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         return remoteJarList;
     }
 
-    private Ps5MenuLoader initMenuLoader() throws IOException {
-        Ps5MenuLoader ps5MenuLoader = new Ps5MenuLoader(new Ps5MenuItem[]{
-                new Ps5MenuItem("Remote JAR loader", "wifi_icon.png"),
-                new Ps5MenuItem("Disk JAR loader", "disk_icon.png"),
-                new Ps5MenuItem("Remote JAR sender", "internet_icon.png"),
-                new Ps5MenuItem("Remote ELF sender", "internet_icon.png")
+    private Ps5MenuLoader initMenuLoader() {
+        Ps5MenuLoader ps5MenuLoader = new Ps5MenuLoader(new Ps5MenuItem[] {
+            new Ps5MenuItem(Method.REMOTE_LOADER, "Remote JAR loader", "wifi_icon.png"),
+            new Ps5MenuItem(Method.PIPELINE_LOADER, "Pipeline runner", "pipeline_icon.png"),
+            new Ps5MenuItem(Method.DISC_LOADER, "Disk JAR loader", "disk_icon.png"),
+            // new Ps5MenuItem(Method.SSD_LOADER, "SSD Loader", "ssd_icon.png"),
+            new Ps5MenuItem(Method.REMOTE_ELF_SENDER, "Remote ELF sender", "internet_icon.png"),
+            new Ps5MenuItem(Method.REMOTE_JAR_SENDER, "Remote JAR sender", "internet_icon.png"),
+            new Ps5MenuItem(Method.USB_LOADER, "USB Loader", "usb_icon.png"),
         });
 
+        initPipelinesloader(ps5MenuLoader);
+        initDiscLoader(ps5MenuLoader);
+        //initUsbElfSender(ps5MenuLoader);
+        //initSsdElfSender(ps5MenuLoader);
+        initRemoteElfSender(ps5MenuLoader);
+        initRemoteJarSender(ps5MenuLoader);
+
+        return ps5MenuLoader;
+    }
+
+    private void initPipelinesloader(Ps5MenuLoader ps5MenuLoader) {
+        final String[] pipelines = listPipelines();
+
+        final Ps5MenuItem[] pipelinesSubItems = new Ps5MenuItem[pipelines.length];
+        for (int i = 0; i < pipelines.length; i++) {
+            final String payload = pipelines[i];
+            pipelinesSubItems[i] = new Ps5MenuItem(Method.PIPELINE_LOADER, payload, null);
+        }
+        ps5MenuLoader.setSubmenuItems(Method.PIPELINE_LOADER, pipelinesSubItems);
+    }
+
+    private void initDiscLoader(Ps5MenuLoader ps5MenuLoader) {
         // init disk jar loader sub items
         final String[] jarPayloads = listJarPayloads();
         final Ps5MenuItem[] diskSubItems = new Ps5MenuItem[jarPayloads.length];
         for (int i = 0; i < jarPayloads.length; i++) {
             final String payload = jarPayloads[i];
-            diskSubItems[i] = new Ps5MenuItem(payload, null);
+            diskSubItems[i] = new Ps5MenuItem(Method.DISC_LOADER, payload, null);
         }
-        ps5MenuLoader.setSubmenuItems(2, diskSubItems);
-
-        initRemoteJarSender(ps5MenuLoader);
-        initRemoteElfSender(ps5MenuLoader);
-
-        return ps5MenuLoader;
+        ps5MenuLoader.setSubmenuItems(Method.DISC_LOADER, diskSubItems);
     }
 
     private File downloadRemoteJarPayload(String url)
@@ -340,8 +467,12 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             if (connection != null)
             {
                 try {
-                    connection.getInputStream().close();
-                    connection.getOutputStream().close();;
+                    if (connection.getInputStream() != null)
+                        connection.getInputStream().close();
+                    if (connection.getOutputStream() != null)
+                        connection.getOutputStream().close();
+                    if (connection.getErrorStream() != null)
+                        connection.getErrorStream().close();
                     connection.disconnect();
                 } catch (Exception e) {
                     // do nothing
@@ -352,36 +483,66 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         return null;
     }
 
-    private void reloadMenuLoader() throws IOException {
+    private void reloadMenuLoader() {
         Ps5MenuLoader oldMenuLoader = ps5MenuLoader;
 
         discPayloadList = null;
+        usbPayloadList = null;
+        usbPayloadRoot = null;
+        ssdPayloadList = null;
+        ssdPayloadRoot = null;
         ps5MenuLoader = initMenuLoader();
         ps5MenuLoader.setSelected(oldMenuLoader.getSelected());
         ps5MenuLoader.setSelectedSub(oldMenuLoader.getSelectedSub());
         ps5MenuLoader.setSubMenuActive(oldMenuLoader.isSubMenuActive());
     }
 
-    private void initRemoteJarSender(Ps5MenuLoader ps5MenuLoader) throws IOException {
+    private void initSsdElfSender(Ps5MenuLoader ps5MenuLoader) {
+        // init usb elf sender sub items
+        final String[] elfPayloads = listSsdPayloads();
+
+        final Ps5MenuItem[] usbSubItems = new Ps5MenuItem[elfPayloads.length];
+        for (int i = 0; i < elfPayloads.length; i++) {
+            final String payload = elfPayloads[i];
+            usbSubItems[i] = new Ps5MenuItem(Method.SSD_LOADER, payload, null);
+        }
+        ps5MenuLoader.setSubmenuItems(Method.SSD_LOADER, usbSubItems);
+    }
+
+    private void initUsbElfSender(Ps5MenuLoader ps5MenuLoader) {
+        // init usb elf sender sub items
+        final String[] elfPayloads = listUsbPayloads();
+
+        final Ps5MenuItem[] usbSubItems = new Ps5MenuItem[elfPayloads.length];
+        for (int i = 0; i < elfPayloads.length; i++) {
+            final String payload = elfPayloads[i];
+            usbSubItems[i] = new Ps5MenuItem(Method.USB_LOADER, payload, null);
+        }
+        ps5MenuLoader.setSubmenuItems(Method.USB_LOADER, usbSubItems);
+    }
+
+    private void initRemoteJarSender(Ps5MenuLoader ps5MenuLoader) {
         // init remote jar sender sub items
         final String[] jarPayloads = listRemoteJarPayloads();
+      
         final Ps5MenuItem[] remoteJarSubItems = new Ps5MenuItem[jarPayloads.length];
         for (int i = 0; i < jarPayloads.length; i++) {
             final String payload = jarPayloads[i];
-            remoteJarSubItems[i] = new Ps5MenuItem(payload, null);
+            remoteJarSubItems[i] = new Ps5MenuItem(Method.REMOTE_JAR_SENDER, payload, null);
         }
-        ps5MenuLoader.setSubmenuItems(3, remoteJarSubItems);
+        ps5MenuLoader.setSubmenuItems(Method.REMOTE_JAR_SENDER, remoteJarSubItems);
     }
 
-    private void initRemoteElfSender(Ps5MenuLoader ps5MenuLoader) throws IOException {
+    private void initRemoteElfSender(Ps5MenuLoader ps5MenuLoader) {
         // init remote elf sender sub items
         final String[] elfPayloads = listRemoteElfPayloads();
+
         final Ps5MenuItem[] remoteElfSubItems = new Ps5MenuItem[elfPayloads.length];
         for (int i = 0; i < elfPayloads.length; i++) {
             final String payload = elfPayloads[i];
-            remoteElfSubItems[i] = new Ps5MenuItem(payload, null);
+            remoteElfSubItems[i] = new Ps5MenuItem(Method.REMOTE_ELF_SENDER, payload, null);
         }
-        ps5MenuLoader.setSubmenuItems(4, remoteElfSubItems);
+        ps5MenuLoader.setSubmenuItems(Method.REMOTE_ELF_SENDER, remoteElfSubItems);
     }
 
     private void initRenderLoop() {
@@ -426,7 +587,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             if (!isTerminateRemoteJarLoaderSeq && (terminateRemoteJarLoaderPressCount > 0) && remoteJarLoaderThread != null) {
                 terminateRemoteJarLoaderPressCount = 0;
             }
-
+            
             switch (userEvent.getCode()) {
                 case HRcEvent.VK_3:
                 case HRcEvent.VK_2:
@@ -446,32 +607,39 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         }
                     }
                     break;
+                case HRcEvent.VK_4:
+                    active = !active;
+                    break;
                 case HRcEvent.VK_RIGHT:
                     if (ps5MenuLoader.getSelected() < ps5MenuLoader.getMenuItems().length) {
                         ps5MenuLoader.setSelected(ps5MenuLoader.getSelected() + 1);
                     }
                     switch(ps5MenuLoader.getSelected()) {
-                        case 1:
+                        case Method.REMOTE_LOADER:
                             ps5MenuLoader.setSubMenuActive(false);
                             break;
-                        case 2:
+                        case Method.DISC_LOADER:
                             ps5MenuLoader.setSubMenuActive(true);
                             break;
-                        case 3:
+                        case Method.REMOTE_JAR_SENDER:
                             ps5MenuLoader.setSubMenuActive(true);
-                            try {
-                                initRemoteJarSender(ps5MenuLoader);
-                            } catch (IOException e) {
-                                Status.printStackTrace("Error initRemoteJarSender()", e);
-                            }
+                            initRemoteJarSender(ps5MenuLoader);
                             break;
-                        case 4:
+                        case Method.REMOTE_ELF_SENDER:
                             ps5MenuLoader.setSubMenuActive(true);
-                            try {
-                                initRemoteElfSender(ps5MenuLoader);
-                            } catch (IOException e) {
-                                Status.printStackTrace("Error initRemoteElfSender()", e);
-                            }
+                            initRemoteElfSender(ps5MenuLoader);
+                            break;
+                        case Method.USB_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initUsbElfSender(ps5MenuLoader);
+                            break;
+                        case Method.SSD_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initSsdElfSender(ps5MenuLoader);
+                            break;
+                        case Method.PIPELINE_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initPipelinesloader(ps5MenuLoader);
                             break;
                     }
                     break;
@@ -481,27 +649,31 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         ps5MenuLoader.setSelected(ps5MenuLoader.getSelected() - 1);
                     }
                     switch(ps5MenuLoader.getSelected()) {
-                        case 1:
+                        case Method.REMOTE_LOADER:
                             ps5MenuLoader.setSubMenuActive(false);
                             break;
-                        case 2:
+                        case Method.DISC_LOADER:
                             ps5MenuLoader.setSubMenuActive(true);
                             break;
-                        case 3:
+                        case Method.REMOTE_JAR_SENDER:
                             ps5MenuLoader.setSubMenuActive(true);
-                            try {
-                                initRemoteJarSender(ps5MenuLoader);
-                            } catch (IOException e) {
-                                Status.printStackTrace("Error initRemoteJarSender()", e);
-                            }
+                            initRemoteJarSender(ps5MenuLoader);
                             break;
-                        case 4:
+                        case Method.REMOTE_ELF_SENDER:
                             ps5MenuLoader.setSubMenuActive(true);
-                            try {
-                                initRemoteElfSender(ps5MenuLoader);
-                            } catch (IOException e) {
-                                Status.printStackTrace("Error initRemoteElfSender()", e);
-                            }
+                            initRemoteElfSender(ps5MenuLoader);
+                            break;
+                        case Method.USB_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initUsbElfSender(ps5MenuLoader);
+                            break;
+                        case Method.SSD_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initSsdElfSender(ps5MenuLoader);
+                            break;
+                        case Method.PIPELINE_LOADER:
+                            ps5MenuLoader.setSubMenuActive(true);
+                            initPipelinesloader(ps5MenuLoader);
                             break;
                     }
                     break;
@@ -522,7 +694,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     if (waiting) {
                         active = true;
                         waiting = false;
-                    } else if (ps5MenuLoader.getSelected() == 1 && remoteJarLoaderThread == null) {
+                    } else if (ps5MenuLoader.getSelected() == Method.REMOTE_LOADER && remoteJarLoaderThread == null) {
                         try {
                             remoteJarLoaderJob = new RemoteJarLoader(Config.getLoaderPort());
                             remoteJarLoaderThread = new Thread(remoteJarLoaderJob, "RemoteJarLoader");
@@ -535,34 +707,55 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                             waiting = true;
                         }
                         active = false;
-                    } else if (ps5MenuLoader.getSelected() == 2) {
-                        Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
-                        discPayloadPath = new File(Config.getLoaderPayloadPath(), selectedItem.getLabel());
+                    } else if (ps5MenuLoader.getSelected() == Method.DISC_LOADER) {
+                        Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                        File payloadFile = new File(Config.getLoaderPayloadPath(), selectedItem.getLabel());
+                        if (selectedItem.getLabel().toLowerCase().endsWith(".jar")) {
+                            discPayloadPath = payloadFile;
+                        } else {
+                            PayloadSender.sendPayloadFromFile(payloadFile);
+                        }
                         active = false;
-                    }  else if (ps5MenuLoader.getSelected() == 3 && remoteJarLoaderThread == null) {
+                    }  else if (ps5MenuLoader.getSelected() == Method.REMOTE_JAR_SENDER) {
                         if (remoteJarList.length > 0) {
-                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
-                            String jarToSend = remoteJarBaseUrl + "/" + selectedItem.getLabel();
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                            String jarToSend = Config.getRemoteJarBaseUrl() + "/" + selectedItem.getLabel();
                             remotePayloadPath = downloadRemoteJarPayload(jarToSend);
-                            /* try {
-                                remoteJarLoaderJob = new RemoteJarSender(jarToSend);
-                                remoteJarLoaderThread = new Thread(remoteJarLoaderJob, "RemoteJarSender");
-    
-                                // Notify the user that this is a one time switch and that BD-J restart is required to return to the menu
-                                Status.println("Starting remote JAR sender. To return to the loader menu, press 3-2-1");
-                                remoteJarLoaderThread.start();
-                            } catch (Throwable ex) {
-                                Status.printStackTrace("Remote JAR sender could not be initialized. Press X to continue", ex);
-                                waiting = true;
-                            } */
-
                             active = false;
                         }
-                    } else if (ps5MenuLoader.getSelected() == 4) {
-                        if (remotePayloadList.length > 0) {
-                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub() - 1];
-                            String elfToSend = remotePayloadBaseUrl + "/" + selectedItem.getLabel();
+                    } else if (ps5MenuLoader.getSelected() == Method.REMOTE_ELF_SENDER) {
+                        if (remoteElfList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                            String elfToSend = Config.getRemotePayloadBaseUrl() + "/" + selectedItem.getLabel();
                             PayloadSender.sendPayloadFromUrl(elfToSend);
+                            active = false;
+                        }
+                    }  else if (ps5MenuLoader.getSelected() == Method.USB_LOADER) {
+                        if (usbPayloadList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                            File elfToSend = new File(usbPayloadRoot, selectedItem.getLabel());
+                            if (selectedItem.getLabel().toLowerCase().endsWith(".jar")) {
+                                discPayloadPath = elfToSend;
+                            } else {
+                                PayloadSender.sendPayloadFromFile(elfToSend);
+                            }
+                            active = false;
+                        }
+                    }  else if (ps5MenuLoader.getSelected() == Method.SSD_LOADER) {
+                        if (ssdPayloadList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                            File elfToSend = new File(ssdPayloadRoot, selectedItem.getLabel());
+                            if (selectedItem.getLabel().toLowerCase().endsWith(".jar")) {
+                                discPayloadPath = elfToSend;
+                            } else {
+                                PayloadSender.sendPayloadFromFile(elfToSend);
+                            }
+                            active = false;
+                        }
+                    }  else if (ps5MenuLoader.getSelected() == Method.PIPELINE_LOADER) {
+                        if (pipelineList.length > 0) {
+                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
+                            pipelinePath = new File(Config.getLoaderPayloadPath(), selectedItem.getLabel());
                             active = false;
                         }
                     }

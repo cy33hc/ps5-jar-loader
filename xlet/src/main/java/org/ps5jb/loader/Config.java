@@ -5,6 +5,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -18,6 +20,9 @@ import java.util.Set;
  */
 public class Config {
     private static final Properties props;
+    private static Boolean isRemoteUp = null;
+    private static String remotePayloadBaseUrl = "http://payloads.ezremote.site:8000";
+    private static String remoteJarBaseUrl = "http://payloads.ezremote.site:9000";
 
     static {
         props = new Properties();
@@ -113,7 +118,7 @@ public class Config {
     public static File getLoaderPayloadPath() {
         File discRoot;
         try {
-            discRoot = getDiscRootPath();
+            discRoot = getRootPath("disc");
         } catch (IOException e) {
             throw new RuntimeException("Payload root path could not be retrieved due to I/O error", e);
         }
@@ -129,7 +134,7 @@ public class Config {
      * @throws RuntimeException If exception occurs that is due
      *   to usage of reflection in the implementation of this method.
      */
-    public static File getDiscRootPath() throws IOException {
+    public static File getRootPath(String path) throws IOException {
         ClassLoader cl = Config.class.getClassLoader();
 
         try {
@@ -149,7 +154,7 @@ public class Config {
                     File xletJarFile = new File(new URI(url.toString()));
                     if (xletJarFile.isFile()) {
                         File discDirectory = new File(xletJarFile.getParentFile(), "../..").getCanonicalFile();
-                        if (discDirectory.isDirectory() && discDirectory.getName().equals("disc")) {
+                        if (discDirectory.isDirectory() && discDirectory.getName().equals(path)) {
                             return discDirectory;
                         }
                     }
@@ -163,4 +168,53 @@ public class Config {
 
         throw new FileNotFoundException("Disc root directory could not be detected");
     }
+
+    public static Boolean isRemoteUp()
+    {
+        if (isRemoteUp == null)
+        {
+            HttpURLConnection connection = null;
+
+            try {
+                connection = (HttpURLConnection) new URL(remotePayloadBaseUrl).openConnection();
+                connection.setRequestMethod("GET");
+                connection.connect();
+
+                if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    isRemoteUp = Boolean.TRUE;
+                }
+                else
+                {
+                    isRemoteUp = Boolean.FALSE;
+                }
+            } catch (Exception e) {
+                Status.printStackTrace("Failed to connect to payload server", e);
+                isRemoteUp = Boolean.FALSE;
+            } finally {
+                if (connection != null)
+                {
+                    try {
+                        connection.getInputStream().close();
+                        connection.getOutputStream().close();;
+                        connection.disconnect();
+                    } catch (Exception e) {
+                        // do nothing
+                    }
+                }
+            }
+        }
+
+        return isRemoteUp;
+    }
+
+    public static String getRemotePayloadBaseUrl()
+    {
+        return remotePayloadBaseUrl;
+    }
+
+    public static String getRemoteJarBaseUrl()
+    {
+        return remoteJarBaseUrl;
+    }
+
 }

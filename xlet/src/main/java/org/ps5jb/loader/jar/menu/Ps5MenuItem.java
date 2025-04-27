@@ -2,22 +2,22 @@ package org.ps5jb.loader.jar.menu;
 
 import java.awt.Image;
 import java.awt.Toolkit;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 
 public class Ps5MenuItem {
 
+    private int type;
     private final String label;
     private Image icon;
 
-    public Ps5MenuItem(String label, String imagePath) throws IOException {
+    public Ps5MenuItem(int type, String label, String imagePath) {
+        this.type = type;
         this.label = label;
 
         if (imagePath != null) {
             InputStream iconStream = this.getClass().getResourceAsStream(imagePath);
             if (iconStream == null) {
-                throw new FileNotFoundException(imagePath);
+                return;
             }
 
             byte[] iconBytes;
@@ -32,13 +32,23 @@ public class Ps5MenuItem {
                         iconWriteStart += iconRead;
                     }
                 }
+                this.icon = Toolkit.getDefaultToolkit().createImage(iconBytes);
+            } catch (Exception e) {
+                // do nothing
             } finally {
-                iconStream.close();
+                try {
+                    iconStream.close();
+                } catch (Exception e) {
+                    // do nothing
+                }
             }
-            this.icon = Toolkit.getDefaultToolkit().createImage(iconBytes);
         }
     }
 
+    public int getType() {
+        return type;
+    }
+    
     public String getLabel() {
         return label;
     }

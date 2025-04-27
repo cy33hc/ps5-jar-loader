@@ -15,10 +15,10 @@ public class Ps5MenuLoader {
     private int selectedSub = 1;
     private boolean subMenuActive = false;
 
-    private final Ps5MenuItem[] menuItems;
+    private Ps5MenuItem[] menuItems;
     private Map submenuItems = new HashMap();
 
-    public Ps5MenuLoader(final Ps5MenuItem[] menuItems) {
+    public Ps5MenuLoader(Ps5MenuItem[] menuItems) {
         this.menuItems = menuItems;
     }
 
@@ -32,7 +32,7 @@ public class Ps5MenuLoader {
 
     // now it gets ugly
     private void renderIcons(final Graphics2D g2d) {
-        final int iconSpaceing = 200;
+        final int iconSpaceing = 100;
         int nextX = iconSpaceing;
         for (int i = 0; i < menuItems.length; i++) {
             final Ps5MenuItem item = menuItems[i];
@@ -40,7 +40,7 @@ public class Ps5MenuLoader {
             g2d.drawImage(item.getIcon(), nextX, 100, null);
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Sans", Font.BOLD, 20));
-            g2d.drawString(item.getLabel(), (int)(nextX + ((256/2f) - item.getLabel().length() * 4.5f)), 100 + 256 + 30);
+            g2d.drawString(item.getLabel(), (int)(nextX + ((172/2f) - item.getLabel().length() * 4.5f)), 100 + 172 + 30);
 
             if (i+1 == selected && subMenuActive) {
                 int nextY = 0;
@@ -52,26 +52,26 @@ public class Ps5MenuLoader {
                         if (getSelectedSub()-1 == j) {
                             g2d.setColor(Color.WHITE);
                             g2d.setFont(new Font("Sans", Font.BOLD, 25));
-                            g2d.drawString("> " + subItem.getLabel() + " <", nextX, 100 + 256 + 30 + 50 + nextY);
+                            g2d.drawString("> " + subItem.getLabel() + " <", nextX, 100 + 172 + 30 + 50 + nextY);
                         } else {
                             g2d.setColor(Color.WHITE);
                             g2d.setFont(new Font("Sans", Font.PLAIN, 25));
-                            g2d.drawString(subItem.getLabel(), nextX, 100 + 256 + 30 + 50 + nextY);
+                            g2d.drawString(subItem.getLabel(), nextX, 100 + 172 + 30 + 50 + nextY);
                         }
                         nextY += 35;
                     }
                 } else {
                     g2d.setColor(Color.WHITE);
                     g2d.setFont(new Font("Sans", Font.PLAIN, 25));
-                    g2d.drawString("Not available!", nextX, 100 + 256 + 30 + 50 + nextY);
+                    g2d.drawString("Not available!", nextX, 100 + 172 + 30 + 50 + nextY);
                 }
             }
 
-            nextX += 256 + 50;
+            nextX += 172 + 50;
         }
 
         g2d.setColor(new Color(64, 156, 217, 51));
-        g2d.fillRoundRect(iconSpaceing - 10 + (selected-1)*(256+50), 100 - 10, 256 + 10 + 10, 256 + 10 + 10 + 30, 40, 40);
+        g2d.fillRoundRect(iconSpaceing - 10 + (selected-1)*(172+50), 100 - 10, 172 + 10 + 10, 172 + 10 + 10 + 30, 40, 40);
 
         if (KernelReadWrite.hasAccessorState()) {
             g2d.setColor(Color.GREEN);
