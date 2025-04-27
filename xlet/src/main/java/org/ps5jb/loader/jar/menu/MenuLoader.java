@@ -30,11 +30,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
     private static String[] discPayloadList;
     private static String[] remoteElfList = null;
     private static String[] remoteJarList = null;
-    private static String[] usbPayloadList;
-    private static String[] ssdPayloadList;
     private static String[] pipelineList;
-    private static File usbPayloadRoot;
-    private static File ssdPayloadRoot;
     private static UserEventRepository evRep = new OverallRepository();
 
     private boolean active = true;
@@ -151,63 +147,6 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             }
         }
         return discPayloadList;
-    }
-
-    /**
-     * Returns a list of ELF/BIN files that are present on usb.
-     *
-     * @return Array of sendable ELF files or an empty list if there are none.
-     */
-    public static String[] listUsbPayloads() {
-        // search for usb0 - usb7
-        usbPayloadList = new String[0];
-        for (int i = 0; i < 8; i++) {
-            try {
-                File f = new File("/mnt/usb" + i + "/payloads");
-                if (f.exists() && f.isDirectory() && f.canRead())
-                {
-                    usbPayloadList = f.list((dir1, name) -> name.toLowerCase().endsWith(".elf") || name.toLowerCase().endsWith(".bin") || name.toLowerCase().endsWith(".jar"));
-                    if (usbPayloadList.length > 0)
-                    {
-                        Status.println("Found usb with elf(s) on " + f.getAbsolutePath());
-                        usbPayloadRoot = f;
-                        break;
-                    }
-                }
-            } catch (Exception ex) {
-                Status.println("Error searching for usb" + i);
-            }
-        }
-
-        return usbPayloadList;
-    }
-
-    /**
-     * Returns a list of ELF/BIN files that are present on usb.
-     *
-     * @return Array of sendable ELF files or an empty list if there are none.
-     */
-    public static String[] listSsdPayloads() {
-        ssdPayloadList = new String[0];
-        try {
-            File f = new File("/data/payloads");
-            if (f.exists() && f.isDirectory() && f.canRead())
-            {
-                ssdPayloadList = f.list((dir1, name) -> name.toLowerCase().endsWith(".elf") || name.toLowerCase().endsWith(".bin") || name.toLowerCase().endsWith(".jar"));
-                if (ssdPayloadList.length > 0)
-                {
-                    Status.println("Found usb with elf(s) on " + f.getAbsolutePath());
-                    ssdPayloadRoot = f;
-                }
-            }
-            else {
-                ssdPayloadList = new String[0];
-            }
-        } catch (Exception ex) {
-            Status.println("Error searching /data/payloads folder");
-        }
-
-        return ssdPayloadList;
     }
 
     /**
@@ -380,16 +319,12 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             new Ps5MenuItem(Method.REMOTE_LOADER, "Remote JAR loader", "wifi_icon.png"),
             new Ps5MenuItem(Method.PIPELINE_LOADER, "Pipeline runner", "pipeline_icon.png"),
             new Ps5MenuItem(Method.DISC_LOADER, "Disk JAR loader", "disk_icon.png"),
-            // new Ps5MenuItem(Method.SSD_LOADER, "SSD Loader", "ssd_icon.png"),
             new Ps5MenuItem(Method.REMOTE_ELF_SENDER, "Remote ELF sender", "internet_icon.png"),
             new Ps5MenuItem(Method.REMOTE_JAR_SENDER, "Remote JAR sender", "internet_icon.png"),
-            new Ps5MenuItem(Method.USB_LOADER, "USB Loader", "usb_icon.png"),
         });
 
         initPipelinesloader(ps5MenuLoader);
         initDiscLoader(ps5MenuLoader);
-        //initUsbElfSender(ps5MenuLoader);
-        //initSsdElfSender(ps5MenuLoader);
         initRemoteElfSender(ps5MenuLoader);
         initRemoteJarSender(ps5MenuLoader);
 
@@ -487,38 +422,10 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         Ps5MenuLoader oldMenuLoader = ps5MenuLoader;
 
         discPayloadList = null;
-        usbPayloadList = null;
-        usbPayloadRoot = null;
-        ssdPayloadList = null;
-        ssdPayloadRoot = null;
         ps5MenuLoader = initMenuLoader();
         ps5MenuLoader.setSelected(oldMenuLoader.getSelected());
         ps5MenuLoader.setSelectedSub(oldMenuLoader.getSelectedSub());
         ps5MenuLoader.setSubMenuActive(oldMenuLoader.isSubMenuActive());
-    }
-
-    private void initSsdElfSender(Ps5MenuLoader ps5MenuLoader) {
-        // init usb elf sender sub items
-        final String[] elfPayloads = listSsdPayloads();
-
-        final Ps5MenuItem[] usbSubItems = new Ps5MenuItem[elfPayloads.length];
-        for (int i = 0; i < elfPayloads.length; i++) {
-            final String payload = elfPayloads[i];
-            usbSubItems[i] = new Ps5MenuItem(Method.SSD_LOADER, payload, null);
-        }
-        ps5MenuLoader.setSubmenuItems(Method.SSD_LOADER, usbSubItems);
-    }
-
-    private void initUsbElfSender(Ps5MenuLoader ps5MenuLoader) {
-        // init usb elf sender sub items
-        final String[] elfPayloads = listUsbPayloads();
-
-        final Ps5MenuItem[] usbSubItems = new Ps5MenuItem[elfPayloads.length];
-        for (int i = 0; i < elfPayloads.length; i++) {
-            final String payload = elfPayloads[i];
-            usbSubItems[i] = new Ps5MenuItem(Method.USB_LOADER, payload, null);
-        }
-        ps5MenuLoader.setSubmenuItems(Method.USB_LOADER, usbSubItems);
     }
 
     private void initRemoteJarSender(Ps5MenuLoader ps5MenuLoader) {
@@ -629,14 +536,6 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                             ps5MenuLoader.setSubMenuActive(true);
                             initRemoteElfSender(ps5MenuLoader);
                             break;
-                        case Method.USB_LOADER:
-                            ps5MenuLoader.setSubMenuActive(true);
-                            initUsbElfSender(ps5MenuLoader);
-                            break;
-                        case Method.SSD_LOADER:
-                            ps5MenuLoader.setSubMenuActive(true);
-                            initSsdElfSender(ps5MenuLoader);
-                            break;
                         case Method.PIPELINE_LOADER:
                             ps5MenuLoader.setSubMenuActive(true);
                             initPipelinesloader(ps5MenuLoader);
@@ -662,14 +561,6 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         case Method.REMOTE_ELF_SENDER:
                             ps5MenuLoader.setSubMenuActive(true);
                             initRemoteElfSender(ps5MenuLoader);
-                            break;
-                        case Method.USB_LOADER:
-                            ps5MenuLoader.setSubMenuActive(true);
-                            initUsbElfSender(ps5MenuLoader);
-                            break;
-                        case Method.SSD_LOADER:
-                            ps5MenuLoader.setSubMenuActive(true);
-                            initSsdElfSender(ps5MenuLoader);
                             break;
                         case Method.PIPELINE_LOADER:
                             ps5MenuLoader.setSubMenuActive(true);
@@ -728,28 +619,6 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                             Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
                             String elfToSend = Config.getRemotePayloadBaseUrl() + "/" + selectedItem.getLabel();
                             PayloadSender.sendPayloadFromUrl(elfToSend);
-                            active = false;
-                        }
-                    }  else if (ps5MenuLoader.getSelected() == Method.USB_LOADER) {
-                        if (usbPayloadList.length > 0) {
-                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
-                            File elfToSend = new File(usbPayloadRoot, selectedItem.getLabel());
-                            if (selectedItem.getLabel().toLowerCase().endsWith(".jar")) {
-                                discPayloadPath = elfToSend;
-                            } else {
-                                PayloadSender.sendPayloadFromFile(elfToSend);
-                            }
-                            active = false;
-                        }
-                    }  else if (ps5MenuLoader.getSelected() == Method.SSD_LOADER) {
-                        if (ssdPayloadList.length > 0) {
-                            Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
-                            File elfToSend = new File(ssdPayloadRoot, selectedItem.getLabel());
-                            if (selectedItem.getLabel().toLowerCase().endsWith(".jar")) {
-                                discPayloadPath = elfToSend;
-                            } else {
-                                PayloadSender.sendPayloadFromFile(elfToSend);
-                            }
                             active = false;
                         }
                     }  else if (ps5MenuLoader.getSelected() == Method.PIPELINE_LOADER) {
