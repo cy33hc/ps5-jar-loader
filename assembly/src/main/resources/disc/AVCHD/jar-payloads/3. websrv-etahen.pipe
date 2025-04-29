@@ -1,0 +1,12 @@
+jar disc umtx1-1.0-SNAPSHOT.jar
+jar disc elfloader-1.1-SNAPSHOT.jar
+sleep 8
+elf remote websrv-latest.elf
+sleep 6
+elf remote etaHEN-latest.bin
+sleep 12
+print 
+print 
+print CLOSE THE DISC APP NOW TO AVOID KERNEL PANIC
+print 
+print 

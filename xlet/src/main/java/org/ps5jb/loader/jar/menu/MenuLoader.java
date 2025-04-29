@@ -49,6 +49,9 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
 
     public MenuLoader() throws IOException {
         ps5MenuLoader = initMenuLoader();
+        ps5MenuLoader.setSelected(1);
+        ps5MenuLoader.setSelectedSub(1);
+        ps5MenuLoader.setSubMenuActive(true);
     }
 
     @Override
@@ -56,7 +59,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         EventManager em = EventManager.getInstance();
 
         Status.println("MenuLoader starting...");
-        for (String payload : listJarPayloads()) {
+        for (String payload : listPipelines()) {
             Status.println("[Payload] " + payload);
         }
 
@@ -316,11 +319,11 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
 
     private Ps5MenuLoader initMenuLoader() {
         Ps5MenuLoader ps5MenuLoader = new Ps5MenuLoader(new Ps5MenuItem[] {
-            new Ps5MenuItem(Method.REMOTE_LOADER, "Remote JAR loader", "wifi_icon.png"),
             new Ps5MenuItem(Method.PIPELINE_LOADER, "Pipeline runner", "pipeline_icon.png"),
             new Ps5MenuItem(Method.DISC_LOADER, "Disk JAR loader", "disk_icon.png"),
             new Ps5MenuItem(Method.REMOTE_ELF_SENDER, "Remote ELF sender", "internet_icon.png"),
             new Ps5MenuItem(Method.REMOTE_JAR_SENDER, "Remote JAR sender", "internet_icon.png"),
+            new Ps5MenuItem(Method.REMOTE_LOADER, "Remote JAR loader", "wifi_icon.png"),
         });
 
         initPipelinesloader(ps5MenuLoader);
