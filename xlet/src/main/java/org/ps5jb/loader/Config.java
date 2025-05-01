@@ -10,6 +10,8 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
@@ -23,6 +25,7 @@ public class Config {
     private static Boolean isRemoteUp = null;
     private static String remotePayloadBaseUrl = "http://payloads.ezremote.site:8000";
     private static String remoteJarBaseUrl = "http://payloads.ezremote.site:9000";
+    private static File queueFile = null;
 
     static {
         props = new Properties();
@@ -123,6 +126,31 @@ public class Config {
             throw new RuntimeException("Payload root path could not be retrieved due to I/O error", e);
         }
         return new File(discRoot, props.getProperty("loader.payload.root", "jar-payloads"));
+    }
+
+    public static File getPayloadQueuePath() {
+        if (queueFile == null)
+        {
+            try {
+                Path queuePath = Path.of("/OS/HDD/download0/BD_BUDA/javatmp/queue");
+                queueFile = new File("/OS/HDD/download0/BD_BUDA/javatmp/queue");
+                if (queueFile.exists())
+                {
+                    File[] files = queueFile.listFiles();
+                    for (int i=0; i<files.length; i++)
+                    {
+                        files[i].delete();
+                    }
+                }
+                else
+                {
+                    Files.createDirectories(queuePath);
+                }
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return queueFile;
     }
 
     /**

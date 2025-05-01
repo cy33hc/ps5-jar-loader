@@ -1,6 +1,7 @@
 jar disc umtx1-1.0-SNAPSHOT.jar
 jar disc elfloader-1.1-SNAPSHOT.jar
 sleep 12
-queue elf remote etaHEN-latest.bin
+queue elf remote websrv-latest.elf
+queue elf remote ftpsrv-latest.elf
 start-payload-loader
 sleep 12

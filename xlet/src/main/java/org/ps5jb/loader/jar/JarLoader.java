@@ -79,7 +79,7 @@ public interface JarLoader extends Runnable {
         }
     }
 
-    default void deleteTempJar(File jarFile) {
+    public static void deleteTempJar(File jarFile) {
         // Delete the file containing the temporary JAR
         if (!jarFile.delete()) {
             // Assume the system temp path was changed by the JAR payload.

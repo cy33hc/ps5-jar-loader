@@ -356,7 +356,12 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
         ps5MenuLoader.setSubmenuItems(Method.DISC_LOADER, diskSubItems);
     }
 
-    private File downloadRemoteJarPayload(String url)
+    public static File downloadPayload(String url)
+    {
+        return downloadPayload(url, null);
+    }
+
+    public static File downloadPayload(String url, File path)
     {
         HttpURLConnection connection = null;
 
@@ -365,20 +370,30 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
             connection.setRequestMethod("GET");
             connection.connect();
 
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK)
+            {
                 InputStream inputStream = connection.getInputStream();
 
-                Path jarPath = Files.createTempFile("jarLoader", ".jar");
-                File jarFile = jarPath.toFile();
+                Path payloadPath = null;
+                File payloadFile = null;
+
+                if (path == null)
+                {
+                    payloadPath = Files.createTempFile("jarLoader", ".jar");
+                    payloadFile = payloadPath.toFile();
+                }
+                else
+                {
+                    payloadFile = path;
+                    payloadPath = Path.of(payloadFile.getPath());
+                }
 
                 try {
-                    jarFile.deleteOnExit();
-
-                    Status.println("Receiving JAR data to: " + jarFile);
+                    Status.println("Receiving payload data to: " + payloadFile.getPath());
                     byte[] buf = new byte[8192];
                     int readCount;
                     int totalSize = 0;
-                    OutputStream jarOut = Files.newOutputStream(jarPath);
+                    OutputStream jarOut = Files.newOutputStream(payloadPath);
                     try {
                         while ((readCount = inputStream.read(buf)) != -1) {
                             jarOut.write(buf, 0, readCount);
@@ -391,16 +406,16 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                     }
                     Status.println("Received " + totalSize + " bytes...Done", true); 
                     
-                    return jarFile; 
+                    return payloadFile; 
                 } catch (IOException | RuntimeException | Error e) {
-                    deleteTempJar(jarFile);
+                    JarLoader.deleteTempJar(payloadFile);
                     throw e;
                 }    
             } else {
-                Status.println("Failed to read JAR " + connection.getResponseMessage());
+                Status.println("Failed to read payload " + connection.getResponseMessage());
             }
         } catch (Exception e) {
-            Status.printStackTrace("Failed to get JAR", e);
+            Status.printStackTrace("Failed to get payload", e);
         } finally {
             if (connection != null)
             {
@@ -614,7 +629,7 @@ public class MenuLoader extends HContainer implements Runnable, UserEventListene
                         if (remoteJarList.length > 0) {
                             Ps5MenuItem selectedItem = ps5MenuLoader.getSubmenuItems(ps5MenuLoader.getSelected())[ps5MenuLoader.getSelectedSub()-1];
                             String jarToSend = Config.getRemoteJarBaseUrl() + "/" + selectedItem.getLabel();
-                            remotePayloadPath = downloadRemoteJarPayload(jarToSend);
+                            remotePayloadPath = downloadPayload(jarToSend);
                             active = false;
                         }
                     } else if (ps5MenuLoader.getSelected() == Method.REMOTE_ELF_SENDER) {

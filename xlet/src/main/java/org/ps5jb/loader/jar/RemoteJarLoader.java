@@ -66,7 +66,7 @@ public class RemoteJarLoader extends SocketListener implements JarLoader {
 
                 this.loadJar(jarFile, true);
             } catch (IOException | RuntimeException | Error e) {
-                deleteTempJar(jarFile);
+                JarLoader.deleteTempJar(jarFile);
                 throw e;
             }
         } finally {

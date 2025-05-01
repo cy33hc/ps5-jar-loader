@@ -9,6 +9,7 @@ import org.ps5jb.loader.Config;
 import org.ps5jb.loader.Status;
 import org.ps5jb.loader.jar.JarLoader;
 
+import java.awt.Menu;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -26,50 +27,28 @@ public class PipelineRunner {
     private static void parsePipeline(File pipelinePath, JarLoader jarLoader) throws Exception {
         final BufferedReader br = new BufferedReader(new FileReader(pipelinePath));
         String line;
+        int queue_idx = 1;
+
         while ((line = br.readLine()) != null) {
             if (line != null && line.length() > 0) {
                 if (line.toLowerCase().startsWith("jar disc ")) {
-                    final String discFileName = line.substring("jar disc ".length()).trim();
-                    final File discFile = new File(Config.getLoaderPayloadPath(), discFileName);
+                    final String jarFileName = line.substring("jar disc ".length()).trim();
+                    final File discFile = new File(Config.getLoaderPayloadPath(), jarFileName);
                     if (discFile.exists()) {
                         jarLoader.loadJar(discFile, false);
                     } else {
-                        Status.println("Pipeline error: Could not find disc file " + discFileName);
+                        Status.println("Pipeline error: Could not find disc file " + jarFileName);
+                        break;
                     }
-                } else if (line.toLowerCase().startsWith("jar usb ")) {
-                    final String usbFileName  = line.substring("jar usb ".length()).trim();
-                    File usbPayloadRoot = findUsbPayloads();
-                    if (usbPayloadRoot == null) {
-                        return;
-                    }
-
-                    final File usbFile = new File(usbPayloadRoot, usbFileName);
-                    if (usbFile.exists()) {
-                        jarLoader.loadJar(usbFile, false);
+                } else if (line.toLowerCase().startsWith("jar remote ")) {
+                    final String jarFileName = line.substring("jar remote ".length()).trim();
+                    String url = Config.getRemotePayloadBaseUrl() + "/" + jarFileName;
+                    final File jarFile =  MenuLoader.downloadPayload(url);
+                    if (jarFile.exists()) {
+                        jarLoader.loadJar(jarFile, true);
                     } else {
-                        Status.println("Pipeline error: Could not find usb file " + usbFileName);
-                    }
-                } else if (line.toLowerCase().startsWith("elf disc ")) {
-                    final String elfFileName  = line.substring("elf disc ".length()).trim();
-
-                    final File elfFile = new File(Config.getLoaderPayloadPath(), elfFileName);
-                    if (elfFile.exists()) {
-                        PayloadSender.sendPayloadFromFile(elfFile);
-                    } else {
-                        Status.println("Pipeline error: Could not find usb file " + elfFileName);
-                    }
-                } else if (line.toLowerCase().startsWith("elf usb ")) {
-                    final String elfFileName  = line.substring("elf usb ".length()).trim();
-                    File usbPayloadRoot = findUsbPayloads();
-                    if (usbPayloadRoot == null) {
-                        return;
-                    }
-
-                    final File usbFile = new File(usbPayloadRoot, elfFileName);
-                    if (usbFile.exists()) {
-                        PayloadSender.sendPayloadFromFile(usbFile);
-                    } else {
-                        Status.println("Pipeline error: Could not find usb file " + elfFileName);
+                        Status.println("Pipeline error: Could not download file " + jarFileName);
+                        break;
                     }
                 } else if (line.toLowerCase().startsWith("elf remote ")) {
                     final String elfFileName  = line.substring("elf remote ".length()).trim();
@@ -79,9 +58,19 @@ public class PipelineRunner {
                     final String sleepSeconds = line.substring("sleep ".length());
                     Status.println("Pipeline: Sleeping for " + sleepSeconds + " seconds...");
                     Thread.sleep(new Integer(sleepSeconds) * 1000);
-                } else if (line.toLowerCase().startsWith("print ")) {
-                    String mesg = line.substring("print ".length());
-                    Status.println(mesg);
+                } else if (line.toLowerCase().startsWith("queue elf remote ")) {
+                    final String elfFileName  = line.substring("queue elf remote ".length()).trim();
+                    String url = Config.getRemotePayloadBaseUrl() + "/" + elfFileName;
+                    File queueFile = new File(Config.getPayloadQueuePath(), String.valueOf(queue_idx) + "." + elfFileName);
+                    if (MenuLoader.downloadPayload(url, queueFile) == null)
+                    {
+                        Status.println("Pipeline error: Failed to download elf");
+                        break;
+                    }
+                    queue_idx = queue_idx + 1;
+                } else if (line.toLowerCase().startsWith("start-payload-loader")) {
+                    File payloadLoader = new File(Config.getLoaderPayloadPath(), "payload-loader-for-ps5-jar-loader.elf");
+                    PayloadSender.sendPayloadFromFile(payloadLoader);
                 }
             }
         }
